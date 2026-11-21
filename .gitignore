@@ -6,3 +6,6 @@ instance/
 .env
 .vercel/
 gastos.db
+.vercel
+.env*
+docs/FINDINGS.md
