@@ -63,7 +63,7 @@ Other suitable options are Railway, Fly.io, or a VPS. Each needs a persistent Po
 
 - Set `APP_ENV=production`; startup now requires an explicit `development`, `test`, or `production` value. Existing deployments that relied on the old development fallback will fail to start until this and the settings below are configured.
 - Set `SECRET_KEY` to a unique random secret of at least 32 characters and keep it in the host's secret manager. The old development placeholder is rejected in every environment.
-- Set `APP_BASE_URL` to a custom canonical HTTPS origin if you use a domain; otherwise Render's HTTPS URL is used. Production startup rejects a missing/non-HTTPS URL, URL path, or SQLite database. Invitation links are not built from request headers.
+- Set `APP_BASE_URL` to a custom canonical HTTPS origin if you use a domain; otherwise the platform URL is used. On Render the app falls back to `RENDER_EXTERNAL_URL`; on Vercel it falls back to `VERCEL_PROJECT_PRODUCTION_URL` or `VERCEL_URL`. A loopback `APP_BASE_URL` such as `http://127.0.0.1:5000` is ignored when a public platform URL is available, and is rejected in production when one is not. Production startup also rejects a missing/non-HTTPS URL, URL path, or SQLite database. Invitation links are not built from request headers.
 - Set `DATABASE_URL` to the production PostgreSQL connection string; production startup requires it. Back up existing data before deployment. The web service's health check at `/health` checks database connectivity.
 - Configure SMTP values if invitations should be delivered by email.
 - The included Procfile sets `APP_ENV=production`; hosts using it must also provide `SECRET_KEY` and `DATABASE_URL` or the process will refuse to start.
