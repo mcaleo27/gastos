@@ -644,6 +644,30 @@ class RuntimeConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "without a path"):
             self.config(APP_BASE_URL="https://gastos.example.test/app")
 
+    def test_production_rejects_loopback_base_urls(self):
+        with self.assertRaisesRegex(RuntimeError, "loopback or private host"):
+            self.config(APP_BASE_URL="https://127.0.0.1:5000")
+        with self.assertRaisesRegex(RuntimeError, "loopback or private host"):
+            self.config(APP_BASE_URL="https://localhost:5000")
+
+    def test_vercel_platform_url_overrides_a_loopback_app_base_url(self):
+        env = dict(self.base_env)
+        env.update(APP_BASE_URL="http://127.0.0.1:5000",
+                   VERCEL_PROJECT_PRODUCTION_URL="gastos-leo-67cb.vercel.app")
+        with patch.dict(os.environ, env, clear=True):
+            environment, _, _, _ = gastos.runtime_config()
+            self.assertEqual(environment, "production")
+            self.assertEqual(gastos.configured_app_base_url(), "https://gastos-leo-67cb.vercel.app")
+
+    def test_vercel_url_is_used_when_app_base_url_is_missing(self):
+        env = dict(self.base_env)
+        env.pop("APP_BASE_URL")
+        env["VERCEL_URL"] = "gastos-preview-abc.vercel.app"
+        with patch.dict(os.environ, env, clear=True):
+            environment, _, _, _ = gastos.runtime_config()
+            self.assertEqual(environment, "production")
+            self.assertEqual(gastos.configured_app_base_url(), "https://gastos-preview-abc.vercel.app")
+
     def test_development_can_use_default_sqlite_and_test_can_use_memory(self):
         environment, _, url, _ = self.config(APP_ENV="development", DATABASE_URL=None)
         self.assertEqual(environment, "development")
