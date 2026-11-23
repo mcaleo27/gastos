@@ -1,4 +1,4 @@
-import os, csv, io, secrets, hashlib, math, re, smtplib, ssl, html, base64, json, hmac, time
+import os, csv, io, secrets, hashlib, math, re, smtplib, ssl, html, base64, json, hmac, time, ipaddress
 from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -43,8 +43,43 @@ LEGACY_INSECURE_SECRET = "local-development-only-change-me"  # rejected; never u
 ALLOWED_APP_ENVS = ("development", "test", "production")
 
 
+def origin_host(value):
+    try:
+        return urlsplit(value if "://" in value else f"//{value}").hostname
+    except ValueError:
+        return None
+
+
+def is_private_app_host(value):
+    host = (origin_host(value) or "").strip().lower()
+    if not host:
+        return False
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_unspecified
+
+
+def platform_app_base_url():
+    for name in ("RENDER_EXTERNAL_URL", "VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_URL"):
+        value = (os.environ.get(name) or "").strip()
+        if not value:
+            continue
+        if not value.startswith(("http://", "https://")):
+            value = "https://" + value
+        return value
+    return ""
+
+
 def configured_app_base_url():
-    return os.environ.get("APP_BASE_URL") or os.environ.get("RENDER_EXTERNAL_URL")
+    explicit = (os.environ.get("APP_BASE_URL") or "").strip()
+    platform = platform_app_base_url()
+    if explicit and not (platform and is_private_app_host(explicit)):
+        return explicit
+    return platform or explicit
 
 
 def runtime_config():
@@ -78,6 +113,8 @@ def runtime_config():
         public_url = urlsplit(configured_base)
         if public_url.scheme != "https" or not public_url.netloc or public_url.username or public_url.password:
             raise RuntimeError("APP_BASE_URL must be a public HTTPS origin in production")
+        if is_private_app_host(configured_base):
+            raise RuntimeError("APP_BASE_URL must not point to a loopback or private host")
         if public_url.path not in ("", "/") or public_url.query or public_url.fragment:
             raise RuntimeError("APP_BASE_URL must be an origin without a path, query, or fragment")
         if not database_url.startswith("postgresql"):
@@ -480,6 +517,8 @@ def public_app_link(params):
         raise RuntimeError("APP_BASE_URL must be a valid public app origin without credentials, query, or fragment")
     if APP_ENV == "production" and parts.scheme != "https":
         raise RuntimeError("APP_BASE_URL must use HTTPS in production")
+    if APP_ENV == "production" and is_private_app_host(base):
+        raise RuntimeError("APP_BASE_URL must not point to a loopback or private host")
     return f"{base.rstrip('/')}/?{urlencode(params)}"
 
 
